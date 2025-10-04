@@ -33,8 +33,10 @@ private:
     static Matrix append_matrix(const Matrix& A, const Matrix& B);
     static Matrix split_matrix(const Matrix& matrix);
     double det_from_diag();
+    // std::pair<Matrix, Matrix>
+    Matrix lu_decompose() const;
 
-    std::pair<Matrix, Matrix> lu_decompose() const;
+    Matrix LU_substitution(const Matrix& matrix) const;
 
     template<bool DETERMINANT>
     static std::vector<double> thomas_method(const Matrix& matrix);
@@ -51,6 +53,9 @@ private:
     std::pair<Matrix, Matrix> get_QR_algorithm(std::size_t& iteration_count) const;
 
     static std::pair<std::vector<double>, std::vector<double>> block_eigenvalue(const Matrix& Ak);
+
+    template<bool JACOBI_VER>
+    Matrix iteration_method(const Matrix& b, std::size_t& iteration_count) const;
 
 public:
     enum OPERATION_TYPE {
@@ -109,9 +114,6 @@ public:
 
     template<OPERATION_TYPE TYPE_OP>
     Matrix inverse() const;
-
-    template<bool JACOBI_VER>
-    Matrix iteration_method(const Matrix& b, std::size_t& iteration_count) const;
 
     std::pair<Matrix, Matrix> get_QR() const;
 

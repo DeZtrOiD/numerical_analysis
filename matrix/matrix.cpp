@@ -1,5 +1,6 @@
 #include "matrix.h"
 
+/// TODO: add complex num for matrix via template, change std::vector to new array 
 
 template double Matrix::det<Matrix::GAUSS>() const;
 template double Matrix::det<Matrix::LU>() const;
@@ -326,8 +327,17 @@ double Matrix::det() const {
         det *= tmp.det_from_diag();
         return det;
     } else if constexpr (TYPE_OP == LU) {
-        auto [L, U] = this->lu_decompose();
-        return L.det_from_diag() * U.det_from_diag();
+        auto LU = this->lu_decompose();
+        double det = 1.0;
+        for (std::size_t i = 0; i < LU._rows; i++) {
+            // if (i < _rows) {
+            //     det *= LU(LU._rows - 1 -  i, i);
+            // }
+            // else {
+            det *= LU(i, i + LU._rows);
+            // }
+        }
+        return det; // L.det_from_diag() * U.det_from_diag();
     } else if constexpr (TYPE_OP == THOMAS) {
         std::vector<double> tmp = thomas_method<true>(*this);
         double det = 1.0;
@@ -385,30 +395,32 @@ Matrix Matrix::split_matrix(const Matrix& matrix) {
     return Matrix(matrix._rows, matrix._columns / 2, std::move(tmp_vec));
 }
 
-std::pair<Matrix, Matrix> Matrix::lu_decompose() const {
+// std::pair<Matrix, Matrix> 
+Matrix Matrix::lu_decompose() const {
     if (_rows != _columns) {
         throw std::logic_error("LU decomposition requires a square matrix.");
     }
     Matrix L = Matrix::get_identity(_rows);
     Matrix U = Matrix::get_zero_matrix(_rows);
-
+    Matrix LU = Matrix::append_matrix(Matrix::get_identity(_rows), Matrix::get_zero_matrix(_rows));
     for (std::size_t i = 0; i < _rows; i++) {
         for (std::size_t j = 0; j < _rows; j++) {
             double sum = (*this)(i, j);
             for (std::size_t k = 0; k <= i; k++) {
-                sum -= L(i, k) * U(k, j);
+                // sum -= L(i, k) * U(k, j);
+                sum -= LU(i, k) * LU(k, j + _rows);
             }
             if (i <= j) {
                 if (std::abs(sum) < _eps) {
                     throw std::logic_error("Zero pivot encountered.");
                 }
-                U(i, j) = sum;
+                LU(i, j + _rows) = sum;
             } else {
-                L(i, j) = sum / U(j, j);
+                LU(i, j) = sum / LU(j, j + _rows);
             }
         }
     }
-    return {L, U};
+    return LU;//{L, U};
 }
 
 template<Matrix::OPERATION_TYPE TYPE_OP>
@@ -438,9 +450,10 @@ Matrix Matrix::solve(const Matrix& b) const {
         return gauss_substitution<true>(tmp);
     } else if constexpr (TYPE_OP == LU) {
         // Ax = b -> LUx = b -> Ly = b -> Ux = y
-        auto [L, U] = this->lu_decompose();
-        Matrix res = gauss_substitution<false>(Matrix::append_matrix(L, b));
-        return gauss_substitution<true>(Matrix::append_matrix(U, res));
+        auto LU = this->lu_decompose();
+        // Matrix res = gauss_substitution<false>(Matrix::append_matrix(L, b));
+
+        return LU.LU_substitution(b);// gauss_substitution<true>(Matrix::append_matrix(U, res));
     } else if constexpr (TYPE_OP == THOMAS) {
         if (_rows != _columns) {
             throw std::logic_error("The Thomas method requires a square matrix.");
@@ -469,6 +482,28 @@ Matrix Matrix::solve(const Matrix& b) const {
     }
 }
 
+Matrix Matrix::LU_substitution(const Matrix& b) const {
+    Matrix res_f{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
+    Matrix res_b{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
+
+    for (std::size_t i = 0; i < this->_rows; i++) {
+        double sum = 0.0;
+        for (std::size_t k = 0; k < i; k++) {
+            sum += (*this)(i, k) * res_f(k, 0);
+        }
+        res_f(i, 0) = (b(i, 0) - sum) / (*this)(i, i);
+    }
+
+    for (std::size_t i = this->_rows; i-- > 0;) {
+        double sum = 0.0;
+        for (std::size_t k = i + 1; k < this->_rows; k++) {
+            sum += (*this)(i, k +  this->_rows) * res_b(k, 0);
+        }
+        res_b(i, 0) = (res_f(i, 0) - sum) / (*this)(i, i +  this->_rows);
+    }
+    return res_b;
+}
+
 template<Matrix::OPERATION_TYPE TYPE_OP>
 Matrix Matrix::inverse() const {
     if (_rows != _columns) {
@@ -481,20 +516,19 @@ Matrix Matrix::inverse() const {
         };
         return split_matrix(tmp);
     } else if constexpr (TYPE_OP == LU) {
-        auto [L, U] = this->lu_decompose();
+        auto LU = this->lu_decompose();
         Matrix b {this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
         b(0, 0) = 1.0;
-        Matrix res = gauss_substitution<true>(
-            Matrix::append_matrix(U, gauss_substitution<false>(Matrix::append_matrix(L, b)))
-        );
+        Matrix res = LU.LU_substitution(b);
         for (std::size_t i = 1; i < this->_rows; i++) {
             b(i - 1, 0) = 0.0;
             b(i, 0) = 1.0;
-            res = Matrix::append_matrix(res,
-                gauss_substitution<true>(Matrix::append_matrix(U,
-                    gauss_substitution<false>(Matrix::append_matrix(L, b)))
-                )
-            );
+            res = Matrix::append_matrix(res, LU.LU_substitution(b));
+            // res = Matrix::append_matrix(res,
+            //     gauss_substitution<true>(Matrix::append_matrix(U,
+            //         gauss_substitution<false>(Matrix::append_matrix(L, b)))
+            //     )
+            // );
         }
         return res;
     } 
