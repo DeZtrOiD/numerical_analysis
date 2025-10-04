@@ -732,7 +732,8 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
     } else {
         // QR iterations
         Matrix Ak = *this;
-        Matrix A_old = Ak;
+        // Matrix A_old = Ak;
+        auto eigen = block_eigenvalue(Ak); 
         for (; iter < max_iter; ++iter) {
             // compute QR of Ak
             Matrix Qk = Matrix::get_identity(n);
@@ -749,8 +750,8 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
 
             Ak = Rk * Qk;
 
-            if (qr_diff(Ak, A_old) < _eps) break;
-            A_old = Ak;
+            if (qr_diff(Ak, eigen) < _eps) break;
+            // A_old = Ak;
         }
 
         auto [re, im] = block_eigenvalue(Ak);
@@ -760,17 +761,18 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
     }
 }
 
-double Matrix::qr_diff(Matrix& Ak, Matrix& A_old) {
+double Matrix::qr_diff(Matrix& Ak, std::pair<std::vector<double>, std::vector<double>>& old_eigen) {
     auto [re_1, im_1] = block_eigenvalue(Ak);
-    auto [re_2, im_2] = block_eigenvalue(A_old);
+    // auto [re_2, im_2] = old_eigen;
     const std::size_t n = Ak._rows;
     double max_diff = 0.0;
     for (std::size_t i = 0; i < n; ++i) {
-        double diff_re = (re_1[i] - re_2[i]) * (re_1[i] - re_2[i]);
-        double diff_im = (im_1[i] - im_2[i]) * (im_1[i] - im_2[i]);
+        double diff_re = (re_1[i] - old_eigen.first[i]) * (re_1[i] - old_eigen.first[i]);
+        double diff_im = (im_1[i] - old_eigen.second[i]) * (im_1[i] - old_eigen.second[i]);
         double val = std::sqrt(diff_im + diff_re);
         if (val > max_diff) max_diff = val;
     }
+    old_eigen = {re_1, im_1};
     return max_diff;
 }
 

@@ -47,7 +47,7 @@ private:
 
     Matrix transpose() const;
 
-    static double qr_diff(Matrix& Ak, Matrix& A_old);
+    static double qr_diff(Matrix& Ak, std::pair<std::vector<double>, std::vector<double>>& old_eigen);
 
     template<bool EIGENVALUES>
     std::pair<Matrix, Matrix> get_QR_algorithm(std::size_t& iteration_count) const;

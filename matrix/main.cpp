@@ -119,13 +119,6 @@ int main() {
     std::cout << Q << std::endl;
     std::cout << "========= RRRRRRRRRRRRRRRRRRRRRRRRRR =========" << std::endl;
     std::cout << R << std::endl;
-    // Matrix var31{5, 5 , {
-    //     3.0, -5.0, -4.0, 7.0, 5,
-    //     4.0, 2.0, 7.0, -5.0, 2.0,
-    //     -6.0, 3.0, 5.0, 2.0, -7.0,
-    //     2.0, 5.0, -4.0, 7.0, 3.0,
-    //     1.0, 9.0, 5.0, -6.0, -2.0
-    // }};
 
     return 0;
 }
