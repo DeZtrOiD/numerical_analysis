@@ -7,6 +7,8 @@
 #include <iomanip>
 #include <print>
 #include <algorithm>
+#include <cmath>
+#include<iostream>
 
 class Matrix {
 private:
@@ -24,20 +26,41 @@ private:
 
     template<bool INVERSE_CASE>
     static FLAGS gauss_forward_elimination(Matrix& matrix);
-    // static Matrix gauss_back_substitution(Matrix& matrix);
+
     template<bool BACK>
     static Matrix gauss_substitution(const Matrix& matrix);
 
     static Matrix append_matrix(const Matrix& A, const Matrix& B);
     static Matrix split_matrix(const Matrix& matrix);
     double det_from_diag();
+
+    std::pair<Matrix, Matrix> lu_decompose() const;
+
+    template<bool DETERMINANT>
+    static std::vector<double> thomas_method(const Matrix& matrix);
+
+    static void permute_rows_for_diagonal_dominance(Matrix& matrix, Matrix& b);
+
+    Matrix Householder_vector(std::size_t num) const;
+
+    Matrix transpose() const;
+
+    static double qr_diff(Matrix& Ak, Matrix& A_old);
+
+    template<bool EIGENVALUES>
+    std::pair<Matrix, Matrix> get_QR_algorithm(std::size_t& iteration_count) const;
+
+    static std::pair<std::vector<double>, std::vector<double>> block_eigenvalue(const Matrix& Ak);
+
 public:
     enum OPERATION_TYPE {
         GAUSS,
-        LU
+        LU,
+        THOMAS,
+        JACOBI,
+        SEIDEL,
     };
 
-    std::pair<Matrix, Matrix> lu_decompose() const;
 
     Matrix(std::size_t rows, std::size_t columns, std::vector<double>& data);
     Matrix(std::size_t rows, std::size_t columns, std::vector<double>&& data);
@@ -86,5 +109,12 @@ public:
 
     template<OPERATION_TYPE TYPE_OP>
     Matrix inverse() const;
+
+    template<bool JACOBI_VER>
+    Matrix iteration_method(const Matrix& b, std::size_t& iteration_count) const;
+
+    std::pair<Matrix, Matrix> get_QR() const;
+
+    Matrix get_eigenvalue() const;
 };
 

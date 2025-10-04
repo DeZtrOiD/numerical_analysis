@@ -1,11 +1,16 @@
 #include "matrix.h"
 
-#include<iostream>
 
 template double Matrix::det<Matrix::GAUSS>() const;
 template double Matrix::det<Matrix::LU>() const;
+template double Matrix::det<Matrix::THOMAS>() const;
+
 template Matrix Matrix::solve<Matrix::GAUSS>(const Matrix& b) const;
 template Matrix Matrix::solve<Matrix::LU>(const Matrix& b) const;
+template Matrix Matrix::solve<Matrix::THOMAS>(const Matrix& b) const;
+template Matrix Matrix::solve<Matrix::JACOBI>(const Matrix& b) const;
+template Matrix Matrix::solve<Matrix::SEIDEL>(const Matrix& b) const;
+
 template Matrix Matrix::inverse<Matrix::GAUSS>() const;
 template Matrix Matrix::inverse<Matrix::LU>() const;
 
@@ -136,7 +141,7 @@ Matrix Matrix::operator*(const Matrix& other) const {
 }
 
 Matrix& Matrix::operator*=(const Matrix& other) {
-    *this = *this + other;
+    *this = *this * other;
     return *this;
 }
 
@@ -264,10 +269,12 @@ Matrix::FLAGS Matrix::gauss_forward_elimination(Matrix& matrix) {
             }
         }
 
-        for (std::size_t j = i; j < matrix._columns; j++) {
-            double tmp = matrix(max_idx, j);
-            matrix(max_idx, j) = matrix(i, j);
-            matrix(i, j) = tmp;
+        if (max_idx != i) {
+            for (std::size_t j = i; j < matrix._columns; j++) {
+                double tmp = matrix(max_idx, j);
+                matrix(max_idx, j) = matrix(i, j);
+                matrix(i, j) = tmp;
+            }
             if constexpr (! INVERSE_CASE) {
                 if (flag == POSITIVE_FLAG) {
                     flag = NEGATIVE_FLAG;
@@ -275,7 +282,7 @@ Matrix::FLAGS Matrix::gauss_forward_elimination(Matrix& matrix) {
                     flag = POSITIVE_FLAG;
                 }
             }
-        }
+        } 
 
         // Substracting rows
         if constexpr (INVERSE_CASE) {
@@ -321,6 +328,13 @@ double Matrix::det() const {
     } else if constexpr (TYPE_OP == LU) {
         auto [L, U] = this->lu_decompose();
         return L.det_from_diag() * U.det_from_diag();
+    } else if constexpr (TYPE_OP == THOMAS) {
+        std::vector<double> tmp = thomas_method<true>(*this);
+        double det = 1.0;
+        for (double i : tmp) {
+            det *= i;
+        }
+        return det;
     } else {
         throw std::logic_error("NOT IMPLEMENTED.");
     }
@@ -373,7 +387,7 @@ Matrix Matrix::split_matrix(const Matrix& matrix) {
 
 std::pair<Matrix, Matrix> Matrix::lu_decompose() const {
     if (_rows != _columns) {
-        throw std::logic_error("UL decomposition requires a square matrix.");
+        throw std::logic_error("LU decomposition requires a square matrix.");
     }
     Matrix L = Matrix::get_identity(_rows);
     Matrix U = Matrix::get_zero_matrix(_rows);
@@ -427,6 +441,31 @@ Matrix Matrix::solve(const Matrix& b) const {
         auto [L, U] = this->lu_decompose();
         Matrix res = gauss_substitution<false>(Matrix::append_matrix(L, b));
         return gauss_substitution<true>(Matrix::append_matrix(U, res));
+    } else if constexpr (TYPE_OP == THOMAS) {
+        if (_rows != _columns) {
+            throw std::logic_error("The Thomas method requires a square matrix.");
+        }
+        return Matrix{this->_rows, 1,  thomas_method<false>(Matrix::append_matrix(*this, b))};
+    } else if constexpr (TYPE_OP == JACOBI) {
+        std::size_t iter = 0;
+        Matrix tmp = *this;
+        Matrix tmp_b = b;
+        permute_rows_for_diagonal_dominance(tmp, tmp_b);
+        tmp = tmp.iteration_method<true>(tmp_b, iter);
+        std::cout << "----- Iteration count JACOBI -----" << std::endl
+            << iter << std::endl << "----------------------------------" << std::endl;
+        return std::move(tmp);
+    } else if constexpr (TYPE_OP == SEIDEL) {
+        std::size_t iter = 0;
+        Matrix tmp = *this;
+        Matrix tmp_b = b;
+        permute_rows_for_diagonal_dominance(tmp, tmp_b);
+        tmp = tmp.iteration_method<false>(tmp_b, iter);
+        std::cout << "----- Iteration count SEIDEL -----" << std::endl
+            << iter << std::endl << "----------------------------------" << std::endl;
+        return std::move(tmp);
+    } else {
+        throw std::logic_error("NOT IMPLEMENTED.");
     }
 }
 
@@ -459,4 +498,260 @@ Matrix Matrix::inverse() const {
         }
         return res;
     } 
+}
+
+template<bool DETERMINANT>
+std::vector<double> Matrix::thomas_method(const Matrix& matrix) {
+    /// TODO: tridiagonal check
+    const std::size_t n = matrix._rows;
+    if constexpr (DETERMINANT) {
+        std::vector<double> diag(n, 0.0);
+        diag[0] = matrix[0, 0];  // new b_0
+        for (std::size_t i = 1; i < n; i++) {
+            double alpha = -matrix(i - 1, i) / diag[i-1];  // alpha_i-1
+            diag[i] = matrix(i, i) + matrix(i, i - 1) * alpha;
+        }
+        return std::move(diag);
+    } else {
+        if (n == 1) {
+            return std::vector<double>{matrix(0, n) / matrix(0, 0)};
+        }
+        std::vector<double> alpha_beta(n * 2, 0.0);
+        alpha_beta[0] = -matrix(0, 1) / matrix(0, 0);  // alpha_1
+        alpha_beta[n] = matrix(0, n) / matrix(0, 0);  // beta_1
+        for (std::size_t i = 1; i < n - 1; i++) {
+            alpha_beta[i] = -matrix(i, i + 1) / (
+                matrix(i, i) + matrix(i, i - 1) * alpha_beta[i - 1]);
+                // alpha_i = -Ci / (Bi + Ai*alpha_i-1)
+            alpha_beta[i + n] = (matrix(i, n) -
+                matrix(i, i - 1) * alpha_beta[i + n - 1]) /
+                (matrix(i, i) + matrix(i, i - 1) * alpha_beta[i - 1]);
+                // beta_i = (Fi - Ai*beta_i-1) / (Bi + Ai*alpha_i-1)
+        }
+        alpha_beta[n * 2 - 1] = (matrix(n - 1, n) -
+            matrix(n - 1, n - 2) * alpha_beta[n * 2 - 2]) /
+            (matrix(n - 1, n - 1) + matrix(n - 1, n - 2) * alpha_beta[n - 2]);
+            // beta_i = (Fi - Ai*beta_i-1) / (Bi + Ai*alpha_i-1)
+        std::vector<double> res(n, 0.0);
+        res[n - 1] = alpha_beta[n * 2 - 1];
+        for (std::size_t i = n - 1; i > 0; i--) {
+            res[i - 1] = alpha_beta[i - 1] * res[i] + alpha_beta[n + i - 1];
+        }
+        return std::move(res);
+    }
+}
+
+template<bool JACOBI_VER>
+Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) const {
+    Matrix res{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
+    double diff = _eps * 10;
+    constexpr std::size_t max_iteration = 10000;
+    iteration_count = 0;
+    Matrix old_x = res;
+    double old_x_seidel = res(0, 0);
+    do {
+        iteration_count++;
+        diff = 0.0;
+        for (std::size_t i = 0; i < this->_rows; i++) {
+            if constexpr (JACOBI_VER) {
+                res(i, 0) = b(i, 0);
+                for (std::size_t j = 0; j < this->_rows; j++) {
+                    if (i != j) {
+                        res(i, 0) -= old_x(j, 0) * (*this)(i, j);
+                    }
+                }
+                res(i, 0) /= (*this)(i, i);
+                diff += (res(i, 0) - old_x(i, 0)) * (res(i, 0) - old_x(i, 0));
+            } else {
+                old_x_seidel = res(i, 0);
+                res(i, 0) = b(i, 0);
+                for (std::size_t j = 0; j < this->_rows; j++) {
+                    if (i != j) {
+                        res(i, 0) -= res(j, 0) * (*this)(i, j);
+                    }
+                }
+                res(i, 0) /= (*this)(i, i);
+                diff += (res(i, 0) - old_x_seidel) * (res(i, 0) - old_x_seidel);
+            }
+        }
+        diff = std::sqrt(diff);
+        old_x = res;
+    } while (std::abs(diff) > _eps && iteration_count < max_iteration);
+    return std::move(res);
+}
+
+void Matrix::permute_rows_for_diagonal_dominance(Matrix& matrix, Matrix& b) {
+    if (matrix._rows < 2) return;
+    for (std::size_t i = 0; i < matrix._rows; i++) {
+        std::size_t max_idx = 0;
+        for (std::size_t j = 1; j < matrix._rows; j++) {
+            if (matrix(max_idx, i) < matrix(j, i)) {
+                max_idx = j;
+            }
+        }
+        if (max_idx != i) {
+            double tmp = 0.0;
+            for (std::size_t j = 0; j < matrix._columns; j++) {
+                tmp = matrix(max_idx, j);
+                matrix(max_idx, j) = matrix(i, j);
+                matrix(i, j) = tmp;
+            }
+            tmp = b(i, 0);
+            b(i, 0) = b(max_idx, 0);
+            b(max_idx, 0) = tmp;
+        }
+    }
+}
+
+Matrix Matrix::Householder_vector(std::size_t k) const {
+    if (k >= _rows) {
+        throw std::logic_error("There is no such vector.");
+    }
+    const std::size_t n = _rows;
+    std::vector<double> vec_data(n, 0.0);
+
+    double norm_sq = 0.0;
+    for (std::size_t i = k; i < n; ++i) {
+        double xi = (*this)(i, k);
+        norm_sq += xi * xi;
+    }
+    double norm_x = std::sqrt(norm_sq);
+
+    double xk = (*this)(k, k);
+    double alpha = -std::copysign(norm_x, xk);
+
+    vec_data[k] = xk - alpha;
+    for (std::size_t i = k + 1; i < n; ++i) {
+        vec_data[i] = (*this)(i, k);
+    }
+
+    return Matrix(n, 1, std::move(vec_data));
+}
+
+Matrix Matrix::transpose() const {
+    std::vector<double> transposed_data(_rows * _columns);
+    for (std::size_t i = 0; i < _rows; ++i) {
+        for (std::size_t j = 0; j < _columns; ++j) {
+            transposed_data[j * _rows + i] = _data[i * _columns + j];
+        }
+    }
+    return Matrix(_columns, _rows, std::move(transposed_data));
+}
+
+std::pair<std::vector<double>, std::vector<double>> Matrix::block_eigenvalue(const Matrix& Ak) {
+        const std::size_t n = Ak._rows;
+        std::vector<double> re(n, 0.0), im(n, 0.0);
+        std::size_t i = 0;
+        while (i < n) {
+            if (i + 1 < n && std::abs(Ak(i + 1, i)) > _eps) {
+                double a = Ak(i, i), b = Ak(i, i + 1), c = Ak(i + 1, i), d = Ak(i + 1, i + 1);
+                double tr = a + d;
+                double det = a * d - b * c;
+                double disc = tr * tr - 4.0 * det;
+                if (disc >= 0.0) {
+                    double s = std::sqrt(disc);
+                    re[i] = (tr + s) / 2.0;
+                    im[i] = 0.0;
+                    re[i + 1] = (tr - s) / 2.0;
+                    im[i + 1] = 0.0;
+                } else {
+                    double s = std::sqrt(-disc);
+                    re[i] = tr / 2.0;
+                    im[i] =  s / 2.0;
+                    re[i + 1] = tr / 2.0;
+                    im[i + 1] = -s / 2.0;
+                }
+                i += 2;
+            } else {
+                re[i] = Ak(i, i);
+                im[i] = 0.0;
+                ++i;
+            }
+        }
+        return {re, im};
+}
+
+template<bool EIGENVALUES>
+std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
+    if (_rows != _columns) {
+        throw std::logic_error("QR algorithm requires a square matrix.");
+    }
+    const std::size_t n = _rows;
+    const std::size_t max_iter = 1000;;
+    iter = 0;
+
+    if constexpr (!EIGENVALUES) {
+        // Single Householder QR decomposition
+        Matrix Q = Matrix::get_identity(n);
+        Matrix R = *this;
+        for (std::size_t k = 0; k + 1 < n; ++k) {
+            Matrix v = R.Householder_vector(k);
+            Matrix vT = v.transpose();
+            double vTv = (vT * v)(0, 0);
+            if (std::abs(vTv) < _eps / 10.0) continue;
+            Matrix H = Matrix::get_identity(n) - (v * vT) * (2.0 / vTv);
+            R = H * R;
+            Q = Q * H;
+        }
+        iter = n - 1;
+        return {Q, R};
+    } else {
+        // QR iterations
+        Matrix Ak = *this;
+        Matrix A_old = Ak;
+        for (; iter < max_iter; ++iter) {
+            // compute QR of Ak
+            Matrix Qk = Matrix::get_identity(n);
+            Matrix Rk = Ak;
+            for (std::size_t k = 0; k + 1 < n; ++k) {
+                Matrix v = Rk.Householder_vector(k);
+                Matrix vT = v.transpose();
+                double vTv = (vT * v)(0, 0);
+                if (std::abs(vTv) < 1e-16) continue;
+                Matrix H = Matrix::get_identity(n) - (v * vT) * (2.0 / vTv);
+                Rk = H * Rk;
+                Qk = Qk * H;
+            }
+
+            Ak = Rk * Qk;
+
+            if (qr_diff(Ak, A_old) < _eps) break;
+            A_old = Ak;
+        }
+
+        auto [re, im] = block_eigenvalue(Ak);
+        Matrix reM(n, 1, std::move(re));
+        Matrix imM(n, 1, std::move(im));
+        return {reM, imM};
+    }
+}
+
+double Matrix::qr_diff(Matrix& Ak, Matrix& A_old) {
+    auto [re_1, im_1] = block_eigenvalue(Ak);
+    auto [re_2, im_2] = block_eigenvalue(A_old);
+    const std::size_t n = Ak._rows;
+    double max_diff = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        double diff_re = (re_1[i] - re_2[i]) * (re_1[i] - re_2[i]);
+        double diff_im = (im_1[i] - im_2[i]) * (im_1[i] - im_2[i]);
+        double val = std::sqrt(diff_im + diff_re);
+        if (val > max_diff) max_diff = val;
+    }
+    return max_diff;
+}
+
+std::pair<Matrix, Matrix> Matrix::get_QR() const {
+    std::size_t iter = 0;
+    auto tmp = (*this).get_QR_algorithm<false>(iter);
+    std::cout << "----- Iteration count get_QR -----" << std::endl
+        << iter << std::endl << "----------------------------------" << std::endl;
+    return tmp;
+}
+
+Matrix Matrix::get_eigenvalue() const {
+    std::size_t iter = 0;
+    auto [re, im] = (*this).get_QR_algorithm<true>(iter);
+    std::cout << "----- Iteration count get_eigenvalue -----" << std::endl
+        << iter << std::endl << "----------------------------------" << std::endl;
+    return append_matrix(re, im);
 }
