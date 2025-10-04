@@ -395,7 +395,6 @@ Matrix Matrix::split_matrix(const Matrix& matrix) {
     return Matrix(matrix._rows, matrix._columns / 2, std::move(tmp_vec));
 }
 
-// std::pair<Matrix, Matrix> 
 Matrix Matrix::lu_decompose() const {
     if (_rows != _columns) {
         throw std::logic_error("LU decomposition requires a square matrix.");
@@ -407,7 +406,6 @@ Matrix Matrix::lu_decompose() const {
         for (std::size_t j = 0; j < _rows; j++) {
             double sum = (*this)(i, j);
             for (std::size_t k = 0; k <= i; k++) {
-                // sum -= L(i, k) * U(k, j);
                 sum -= LU(i, k) * LU(k, j + _rows);
             }
             if (i <= j) {
@@ -420,7 +418,7 @@ Matrix Matrix::lu_decompose() const {
             }
         }
     }
-    return LU;//{L, U};
+    return LU;
 }
 
 template<Matrix::OPERATION_TYPE TYPE_OP>
@@ -524,11 +522,6 @@ Matrix Matrix::inverse() const {
             b(i - 1, 0) = 0.0;
             b(i, 0) = 1.0;
             res = Matrix::append_matrix(res, LU.LU_substitution(b));
-            // res = Matrix::append_matrix(res,
-            //     gauss_substitution<true>(Matrix::append_matrix(U,
-            //         gauss_substitution<false>(Matrix::append_matrix(L, b)))
-            //     )
-            // );
         }
         return res;
     } 
@@ -577,6 +570,9 @@ std::vector<double> Matrix::thomas_method(const Matrix& matrix) {
 
 template<bool JACOBI_VER>
 Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) const {
+    if (! this->is_convergent()) {
+        throw std::logic_error("Matrix isn't convergent");
+    }
     Matrix res{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
     double diff = _eps * 10;
     constexpr std::size_t max_iteration = 10000;
@@ -612,6 +608,18 @@ Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) c
         old_x = res;
     } while (std::abs(diff) > _eps && iteration_count < max_iteration);
     return std::move(res);
+}
+
+bool Matrix::is_convergent() const {
+    const std::size_t n = this->_rows;
+    for (std::size_t i = 0; i < n; i++) {
+        double sum = 0.0;
+        for (std::size_t j = 0; j < n; j++) {
+            if (i != j) sum += std::abs((*this)(i, j));
+        }
+        if ((*this)(i, i) <= sum) return 0;
+    }
+    return 1;
 }
 
 void Matrix::permute_rows_for_diagonal_dominance(Matrix& matrix, Matrix& b) {
@@ -732,7 +740,6 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
     } else {
         // QR iterations
         Matrix Ak = *this;
-        // Matrix A_old = Ak;
         auto eigen = block_eigenvalue(Ak); 
         for (; iter < max_iter; ++iter) {
             // compute QR of Ak
@@ -751,9 +758,7 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
             Ak = Rk * Qk;
 
             if (qr_diff(Ak, eigen) < _eps) break;
-            // A_old = Ak;
         }
-
         auto [re, im] = block_eigenvalue(Ak);
         Matrix reM(n, 1, std::move(re));
         Matrix imM(n, 1, std::move(im));
@@ -763,7 +768,6 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
 
 double Matrix::qr_diff(Matrix& Ak, std::pair<std::vector<double>, std::vector<double>>& old_eigen) {
     auto [re_1, im_1] = block_eigenvalue(Ak);
-    // auto [re_2, im_2] = old_eigen;
     const std::size_t n = Ak._rows;
     double max_diff = 0.0;
     for (std::size_t i = 0; i < n; ++i) {

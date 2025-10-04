@@ -33,7 +33,7 @@ private:
     static Matrix append_matrix(const Matrix& A, const Matrix& B);
     static Matrix split_matrix(const Matrix& matrix);
     double det_from_diag();
-    // std::pair<Matrix, Matrix>
+
     Matrix lu_decompose() const;
 
     Matrix LU_substitution(const Matrix& matrix) const;
@@ -45,7 +45,6 @@ private:
 
     Matrix Householder_vector(std::size_t num) const;
 
-    Matrix transpose() const;
 
     static double qr_diff(Matrix& Ak, std::pair<std::vector<double>, std::vector<double>>& old_eigen);
 
@@ -57,6 +56,8 @@ private:
     template<bool JACOBI_VER>
     Matrix iteration_method(const Matrix& b, std::size_t& iteration_count) const;
 
+    bool is_convergent() const;
+
 public:
     enum OPERATION_TYPE {
         GAUSS,
@@ -66,6 +67,7 @@ public:
         SEIDEL,
     };
 
+    Matrix transpose() const;
 
     Matrix(std::size_t rows, std::size_t columns, std::vector<double>& data);
     Matrix(std::size_t rows, std::size_t columns, std::vector<double>&& data);

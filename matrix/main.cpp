@@ -108,9 +108,6 @@ int main() {
         2.0,  5.0, -4.0,  1.0,  3.0,
         18.0,  3.0, -5.0,  1.0, -2.0
         }
-        // 3, 3, {
-        //     2, 1, 
-        // }
     };
     std::cout << QR_var26.get_eigenvalue() << std::endl;
     std::cout << "==============================================" << std::endl;
@@ -119,7 +116,8 @@ int main() {
     std::cout << Q << std::endl;
     std::cout << "========= RRRRRRRRRRRRRRRRRRRRRRRRRR =========" << std::endl;
     std::cout << R << std::endl;
-
+    // std::cout << "========= AAAAAAAAAAAAAAAAAAAAAAAAAA =========" << std::endl;
+    // std::cout << Q * R << std::endl;
     return 0;
 }
 
