@@ -328,16 +328,16 @@ double Matrix::det() const {
         return det;
     } else if constexpr (TYPE_OP == LU) {
         auto LU = this->lu_decompose();
-        double det = 1.0;
-        for (std::size_t i = 0; i < LU._rows; i++) {
-            // if (i < _rows) {
-            //     det *= LU(LU._rows - 1 -  i, i);
-            // }
-            // else {
-            det *= LU(i, i + LU._rows);
-            // }
-        }
-        return det; // L.det_from_diag() * U.det_from_diag();
+        // double det = 1.0;
+        // for (std::size_t i = 0; i < LU._rows; i++) {
+        //     // if (i < _rows) {
+        //     //     det *= LU(LU._rows - 1 -  i, i);
+        //     // }
+        //     // else {
+        //     det *= LU(i, i + LU._rows);
+        //     // }
+        // }
+        return LU.det_from_diag(); // L.det_from_diag() * U.det_from_diag();
     } else if constexpr (TYPE_OP == THOMAS) {
         std::vector<double> tmp = thomas_method<true>(*this);
         double det = 1.0;
@@ -399,23 +399,27 @@ Matrix Matrix::lu_decompose() const {
     if (_rows != _columns) {
         throw std::logic_error("LU decomposition requires a square matrix.");
     }
-    Matrix L = Matrix::get_identity(_rows);
-    Matrix U = Matrix::get_zero_matrix(_rows);
-    Matrix LU = Matrix::append_matrix(Matrix::get_identity(_rows), Matrix::get_zero_matrix(_rows));
-    for (std::size_t i = 0; i < _rows; i++) {
-        for (std::size_t j = 0; j < _rows; j++) {
-            double sum = (*this)(i, j);
-            for (std::size_t k = 0; k <= i; k++) {
-                sum -= LU(i, k) * LU(k, j + _rows);
+    Matrix LU = (*this);
+    const size_t n = _rows;
+    for (std::size_t i = 0; i < n; i++) {
+        for (size_t j = i; j < n; j++) {
+            // double sum = 0.0;
+            for (size_t k = 0; k < i; ++k) {
+                // sum += LU(i, k) * LU(k, j);
+                LU(i, j) -= LU(i, k) * LU(k, j);
             }
-            if (i <= j) {
-                if (std::abs(sum) < _eps) {
-                    throw std::logic_error("Zero pivot encountered.");
-                }
-                LU(i, j + _rows) = sum;
-            } else {
-                LU(i, j) = sum / LU(j, j + _rows);
+            // LU(i, j) -= sum;
+        }
+        if (std::abs(LU(i, i)) < _eps) {
+            throw std::logic_error("Zero pivot encountered.");
+        }
+        for (size_t j = i + 1; j < n; ++j) {
+            // double sum = 0.0;
+            LU(j, i) =  LU(j, i) / LU(i, i);
+            for (size_t k = 0; k < i; ++k) {
+                LU(j, i) -= LU(j, k) * LU(k, i) / LU(i, i);
             }
+            // LU(j, i) = (LU(j, i) - sum) / LU(i, i);
         }
     }
     return LU;
@@ -481,25 +485,26 @@ Matrix Matrix::solve(const Matrix& b) const {
 }
 
 Matrix Matrix::LU_substitution(const Matrix& b) const {
-    Matrix res_f{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
-    Matrix res_b{this->_rows, 1, std::vector<double>(this->_rows, 0.0)};
+    const size_t n = _rows;
+    Matrix y{n, 1, std::vector<double>(this->_rows, 0.0)};
+    Matrix x{n, 1, std::vector<double>(this->_rows, 0.0)};
 
-    for (std::size_t i = 0; i < this->_rows; i++) {
+    for (std::size_t i = 0; i < n; i++) {
         double sum = 0.0;
         for (std::size_t k = 0; k < i; k++) {
-            sum += (*this)(i, k) * res_f(k, 0);
+            sum += (*this)(i, k) * y(k, 0);
         }
-        res_f(i, 0) = (b(i, 0) - sum) / (*this)(i, i);
+        y(i, 0) = b(i, 0) - sum;
     }
 
-    for (std::size_t i = this->_rows; i-- > 0;) {
+    for (std::size_t i = n; i-- > 0;) {
         double sum = 0.0;
-        for (std::size_t k = i + 1; k < this->_rows; k++) {
-            sum += (*this)(i, k +  this->_rows) * res_b(k, 0);
+        for (std::size_t k = i + 1; k < n; k++) {
+            sum += (*this)(i, k) * x(k, 0);
         }
-        res_b(i, 0) = (res_f(i, 0) - sum) / (*this)(i, i +  this->_rows);
+        x(i, 0) = (y(i, 0) - sum) / (*this)(i, i);
     }
-    return res_b;
+    return x;
 }
 
 template<Matrix::OPERATION_TYPE TYPE_OP>
@@ -759,7 +764,7 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
 
             if (qr_diff(Ak, eigen) < _eps) break;
         }
-        auto [re, im] = block_eigenvalue(Ak);
+        auto [re, im] = eigen;
         Matrix reM(n, 1, std::move(re));
         Matrix imM(n, 1, std::move(im));
         return {reM, imM};
