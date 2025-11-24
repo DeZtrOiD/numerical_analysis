@@ -69,7 +69,7 @@ int main() {
             -26.0, 40.0, 17.0, 19.0, 61.0, -36.0, -70.0, 39.0
         }
     };
-
+    // НУЖНО ДОБАВИТЬ ПРОВЕРКУ УСЛОВИЯ СХОДИМОСТИ 
     std::cout <<"Thomas det: " << thom_A_26.det<Matrix::THOMAS>() << std::endl;
     std::cout <<"Gauss det: " << thom_A_26.det<Matrix::GAUSS>() << std::endl;
     std::cout << "==============================================" << std::endl;

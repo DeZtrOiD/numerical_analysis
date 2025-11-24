@@ -57,6 +57,7 @@ private:
     Matrix iteration_method(const Matrix& b, std::size_t& iteration_count) const;
 
     bool is_convergent() const;
+    bool thomas_convergent() const;
 
 public:
     enum OPERATION_TYPE {
@@ -120,5 +121,6 @@ public:
     std::pair<Matrix, Matrix> get_QR() const;
 
     Matrix get_eigenvalue() const;
+
 };
 

@@ -534,7 +534,9 @@ Matrix Matrix::inverse() const {
 
 template<bool DETERMINANT>
 std::vector<double> Matrix::thomas_method(const Matrix& matrix) {
-    /// TODO: tridiagonal check
+    if (!matrix.thomas_convergent()) {
+        throw std::logic_error("Thomas's method doesn't converge.");
+    }
     const std::size_t n = matrix._rows;
     if constexpr (DETERMINANT) {
         std::vector<double> diag(n, 0.0);
@@ -573,6 +575,26 @@ std::vector<double> Matrix::thomas_method(const Matrix& matrix) {
     }
 }
 
+bool Matrix::thomas_convergent() const {
+    // по сути дагональное преобладание
+    using std::abs;
+
+    const std::size_t n = this->_rows;
+    bool convergent = true;
+    if ((abs((*this)(0, 0)) <= abs((*this)(0, 1))) ||
+        (abs((*this)(n-1, n-1)) <= abs((*this)(n - 1, n - 2)))) {
+        // |b1| <= |c1| or |bn| <= |an|
+        return false;
+    }
+    for(std::size_t i = 1; i < n - 2; i++) {
+        // |bi| < |ai| + |ci|
+        if (abs((*this)(i, i)) < abs((*this)(i, i - 1)) + abs((*this)(i, i + 1))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 template<bool JACOBI_VER>
 Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) const {
     if (! this->is_convergent()) {
@@ -582,22 +604,35 @@ Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) c
     double diff = _eps * 10;
     constexpr std::size_t max_iteration = 10000;
     iteration_count = 0;
-    Matrix old_x = res;
-    double old_x_seidel = res(0, 0);
-    do {
-        iteration_count++;
-        diff = 0.0;
-        for (std::size_t i = 0; i < this->_rows; i++) {
-            if constexpr (JACOBI_VER) {
+
+//=============================================================================
+    // Простые итерации
+    if constexpr (JACOBI_VER) {
+        Matrix old_x = res;
+        do { 
+            iteration_count++;
+            diff = 0.0;
+            for (std::size_t i = 0; i < this->_rows; i++) { 
                 res(i, 0) = b(i, 0);
                 for (std::size_t j = 0; j < this->_rows; j++) {
                     if (i != j) {
+                        // xi = aij/aii * x_old + b; получается выражением xi из iго уравнения 
                         res(i, 0) -= old_x(j, 0) * (*this)(i, j);
                     }
                 }
                 res(i, 0) /= (*this)(i, i);
                 diff += (res(i, 0) - old_x(i, 0)) * (res(i, 0) - old_x(i, 0));
-            } else {
+            old_x = res;
+            }
+            diff = std::sqrt(diff);
+        } while (std::abs(diff) > _eps && iteration_count < max_iteration);   
+//=============================================================================
+    } else {  // Зейдель
+        double old_x_seidel = res(0, 0);
+        do {
+            iteration_count++;
+            diff = 0.0;
+            for (std::size_t i = 0; i < this->_rows; i++) {
                 old_x_seidel = res(i, 0);
                 res(i, 0) = b(i, 0);
                 for (std::size_t j = 0; j < this->_rows; j++) {
@@ -608,22 +643,32 @@ Matrix Matrix::iteration_method(const Matrix& b, std::size_t& iteration_count) c
                 res(i, 0) /= (*this)(i, i);
                 diff += (res(i, 0) - old_x_seidel) * (res(i, 0) - old_x_seidel);
             }
-        }
-        diff = std::sqrt(diff);
-        old_x = res;
-    } while (std::abs(diff) > _eps && iteration_count < max_iteration);
+            diff = std::sqrt(diff);
+        } while (std::abs(diff) > _eps && iteration_count < max_iteration);
+    }
     return std::move(res);
 }
 
 bool Matrix::is_convergent() const {
     const std::size_t n = this->_rows;
+    bool flag_row = true; // преобладание по строкам
+    bool flag_col = true; // по столбцам
     for (std::size_t i = 0; i < n; i++) {
-        double sum = 0.0;
+        double sum = 0.0;  // строки
         for (std::size_t j = 0; j < n; j++) {
             if (i != j) sum += std::abs((*this)(i, j));
         }
-        if ((*this)(i, i) <= sum) return 0;
+        flag_row = flag_row && !((*this)(i, i) < sum);  // false если нарушено хотя бы один раз
+
+        sum = 0.0;  // столбцы
+        for (std::size_t j = 0; j < n; j++) {
+            if (i != j) sum += std::abs((*this)(j, i));
+        }
+        flag_col = flag_col && !((*this)(i, i) < sum);
+
+        if (!(flag_col || flag_row)) return 0; // если оба условия нарушены возможно для разных(!) циклов
     }
+
     return 1;
 }
 
@@ -761,6 +806,11 @@ std::pair<Matrix, Matrix> Matrix::get_QR_algorithm(std::size_t& iter) const {
             }
 
             Ak = Rk * Qk;
+            if (iter == 115) {
+                std::cout << "========= A115 =========" << std::endl;
+                std::cout << Ak << std::endl;
+                std::cout << "========= A115 =========" << std::endl;
+            }
 
             if (qr_diff(Ak, eigen) < _eps) break;
         }
