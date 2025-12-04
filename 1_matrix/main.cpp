@@ -73,7 +73,7 @@ int main() {
     std::cout <<"Thomas det: " << thom_A_26.det<Matrix::THOMAS>() << std::endl;
     std::cout <<"Gauss det: " << thom_A_26.det<Matrix::GAUSS>() << std::endl;
     std::cout << "==============================================" << std::endl;
-    std::cout << "Solution" << thom_A_26.solve<Matrix::THOMAS>(thom_b_26) << std::endl;
+    std::cout << "Solution\n" << thom_A_26.solve<Matrix::THOMAS>(thom_b_26) << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "B for solution:\n" << thom_A_26 * thom_A_26.solve<Matrix::THOMAS>(thom_b_26) << std::endl;

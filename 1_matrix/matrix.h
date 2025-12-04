@@ -18,7 +18,7 @@ private:
         SINGULAR_FLAG,
         NON_SINGULAR_FLAG
     };
-
+public:
     std::size_t _rows;
     std::size_t _columns;
     std::vector<double> _data;
